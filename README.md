@@ -6,6 +6,19 @@ The application operates **fully client-side** using **Dexie.js (IndexedDB)** fo
 
 ---
 
+## 📸 Visual Overview
+
+### 🔍 Document Viewer & AI Study Tutor
+![Viewer and Tutor](assets/viewer_screenshot.png)
+
+### 📝 Dynamic Quiz Engine
+![Quiz Generation](assets/quiz_screenshot.png)
+
+### 🕸️ AI Mindmapper
+![Concept Mindmap](assets/mindmap_screenshot.png)
+
+---
+
 ## 🚀 Key Features
 
 *   **📄 PDF Visual Canvas Renderer**: Upload textbooks, homework sheets, or research slides. Render pages visually exactly as they are without heavy server-side processing.
