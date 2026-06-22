@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyBuddy — Notebook LLM Studio</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0e0f11',
+                        darkCard: '#16171a',
+                        darkBorder: '#24262a',
+                        neonPink: '#ff4da6',
+                        accentOrange: '#fb923c',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- PDF.js CDN for Client-side parsing & Rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <!-- Dexie.js CDN for Client-side Database -->
+    <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+    <style>
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #24262a;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+        .pulse-effect {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-darkBg dark:text-[#f3f4f6] transition-colors duration-300 font-sans h-screen flex flex-col antialiased overflow-hidden">
+
+    <!-- HEADER NAVIGATION PANEL -->
+    <header class="border-b border-slate-200 dark:border-darkBorder bg-white dark:bg-darkCard px-6 py-4 flex flex-wrap justify-between items-center gap-4 h-[76px] shrink-0 transition-colors duration-300">
+        <!-- Logo Branding -->
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-neonPink to-accentOrange flex items-center justify-center shadow-lg shadow-black/40">
+                <i data-lucide="box" class="w-6 h-6 text-[#0e0f11] stroke-[2.5]"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-black tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
+                    StudyBuddy <span class="text-xs bg-slate-100 dark:bg-darkBorder text-neonPink px-2 py-0.5 rounded-full font-mono uppercase">Notebook LLM</span>
+                </h1>
+                <p class="text-[10px] text-slate-500 dark:text-gray-400 font-medium">Interactive Multi-Doc Workspace</p>
+            </div>
+        </div>
+
+        <!-- API Key & Connection Panel -->
+        <div class="flex flex-wrap items-center gap-3 bg-slate-100/80 dark:bg-darkBg/60 p-2 rounded-2xl border border-slate-200 dark:border-darkBorder max-w-md w-full md:w-auto">
+            <div class="relative flex-1 md:w-80 flex gap-2">
+                <div class="relative flex-1">
+                    <i data-lucide="key" class="absolute left-3 top-2.5 w-4 h-4 text-gray-500"></i>
+                    <input type="password" id="apiKeyInput" placeholder="Enter Gemini API Key..." 
+                        class="w-full pl-9 pr-4 py-1.5 bg-white dark:bg-darkCard text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-neonPink text-slate-800 dark:text-[#f3f4f6] border border-slate-200 dark:border-darkBorder"
+                        onkeydown="if(event.key === 'Enter') { validateApiKey(); }">
+                </div>
+                <button onclick="validateApiKey()" class="bg-neonPink hover:bg-neonPink/80 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1 shrink-0 shadow-md">
+                    <i data-lucide="link" class="w-3.5 h-3.5"></i> Connect
+                </button>
+            </div>
+            
+            <!-- Connection Badge -->
+            <div id="statusBadge" class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-darkCard rounded-xl border border-slate-200 dark:border-darkBorder text-xs font-semibold shadow-sm">
+                <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-red-500 pulse-effect shadow-[0_0_8px_rgba(239,68,68,0.5)]"></span>
+                <span id="statusText" class="text-red-500 dark:text-red-400">Offline</span>
+            </div>
+        </div>
+
+        <!-- Theme Switch & Help Buttons -->
+        <div class="flex items-center gap-3">
+            <button onclick="toggleTheme()" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-darkBg dark:hover:bg-darkBorder transition-all border border-slate-200 dark:border-darkBorder text-slate-600 dark:text-gray-300" title="Toggle Light/Dark Theme">
+                <i data-lucide="sun" id="sunIcon" class="w-5 h-5 hidden"></i>
+                <i data-lucide="moon" id="moonIcon" class="w-5 h-5"></i>
+            </button>
+            <button onclick="triggerHelp()" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-darkBg dark:hover:bg-darkBorder transition-all border border-slate-200 dark:border-darkBorder text-slate-600 dark:text-gray-300">
+                <i data-lucide="help-circle" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN DASHBOARD CONTENT -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 lg:p-6 overflow-hidden h-[calc(100vh-76px)]">
+        
+        <!-- LEFT SIDEBAR: Document Manager & Scope Controls (Col-span 3) -->
+        <section class="lg:col-span-3 flex flex-col gap-4 bg-white dark:bg-darkCard p-5 rounded-3xl border border-slate-200 dark:border-darkBorder shadow-xl overflow-y-auto h-full">
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-darkBorder pb-3">
+                <h2 class="text-md font-bold tracking-tight text-slate-800 dark:text-white flex items-center gap-2">
+                    <i data-lucide="folders" class="text-neonPink w-5 h-5"></i> Document Hub 
+                </h2>
+                <span id="docCount" class="text-xs font-mono bg-neonPink/10 text-neonPink px-2 py-0.5 rounded-full border border-neonPink/20">0 Loaded</span>
+            </div>
+
+            <!-- PDF Upload Dropzone -->
+            <div class="border-2 border-dashed border-slate-200 dark:border-darkBorder rounded-2xl p-6 text-center hover:border-neonPink/60 transition-all cursor-pointer bg-slate-50 dark:bg-[#0e0f11]/40 relative group shrink-0">
+                <input type="file" id="pdfFileInput" accept=".pdf" multiple class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileUpload(event)">
+                <div class="flex flex-col items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl bg-neonPink/10 flex items-center justify-center text-neonPink group-hover:scale-105 transition-transform">
+                        <i data-lucide="upload-cloud" class="w-7 h-7"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-700 dark:text-white">Drop your study PDFs here </p>
+                        <p class="text-[10px] text-gray-500 mt-1">Parses visual and text layers instantly</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Study Scope Selector Segment -->
+            <div class="space-y-2.5 mt-2 hidden shrink-0" id="scopeSelectorContainer">
+                <label class="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <i data-lucide="sliders" class="w-3.5 h-3.5 text-neonPink"></i> Study Scope Mode 🎯
+                </label>
+                <div class="grid grid-cols-2 gap-1.5 bg-slate-100 dark:bg-darkBg p-1 rounded-xl border border-slate-200 dark:border-darkBorder">
+                    <button onclick="setStudyScope('active')" id="scopeBtn_active" class="py-1.5 text-[10px] font-bold rounded-lg transition-all bg-neonPink text-white shadow-sm flex items-center justify-center gap-1">
+                        <span>📍 Single Doc</span>
+                    </button>
+                    <button onclick="setStudyScope('all')" id="scopeBtn_all" class="py-1.5 text-[10px] font-bold rounded-lg transition-all text-slate-500 dark:text-gray-400 flex items-center justify-center gap-1">
+                        <span>📚 Study All</span>
+                    </button>
+                </div>
+                <p id="scopeStatusDesc" class="text-[9px] text-gray-400 italic">Currently analyzing only the active focused PDF.</p>
+            </div>
+
+            <!-- Doc Switcher Dropdown -->
+            <div class="space-y-2 mt-2 hidden shrink-0" id="docSelectorContainer">
+                <div class="flex items-center justify-between">
+                    <label class="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <i data-lucide="file-check" class="w-3.5 h-3.5 text-neonPink"></i> Active Focus PDF
+                    </label>
+                    <button onclick="deleteActiveDocument()" class="text-slate-400 hover:text-red-500 transition-colors" title="Delete current document">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+                <select id="activeDocSelect" onchange="switchActiveDocument()" class="w-full bg-slate-50 dark:bg-darkBg text-xs rounded-xl p-3 border border-slate-200 dark:border-darkBorder text-slate-800 dark:text-white cursor-pointer focus:outline-none">
+                    <!-- Loaded document list elements -->
+                </select>
+            </div>
+
+            <!-- Empty State Help Text -->
+            <div id="sidebarEmptyNotice" class="text-center py-6 text-gray-400 text-xs leading-relaxed space-y-2">
+                <p>💡 Upload multiple textbook chapters, homework PDFs, or slides to unlock full interactive study utilities.</p>
+            </div>
+        </section>
+
+        <!-- MIDDLE PANEL: Interactive Workspace & Study Tabs (Col-span 5) -->
+        <section class="lg:col-span-5 flex flex-col gap-4 bg-white dark:bg-darkCard p-5 rounded-3xl border border-slate-200 dark:border-darkBorder shadow-xl h-full overflow-hidden">
+            <!-- Workspace Mode Header -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-darkBorder shrink-0">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-neonPink/10 text-neonPink rounded-lg flex items-center justify-center">
+                        <i data-lucide="layout" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800 dark:text-white">Workspace 🛠️</h2>
+                        <p class="text-[10px] text-gray-400">Contextual Learning Center</p>
+                    </div>
+                </div>
+                
+                <!-- Feature Action Selector Buttons -->
+                <div class="flex flex-wrap gap-1 bg-slate-100 dark:bg-darkBg p-1 rounded-xl border border-slate-200 dark:border-darkBorder shrink-0">
+                    <button onclick="switchTab('viewer')" id="tabBtn_viewer" class="tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-neonPink text-white shadow transition-all">
+                        Viewer
+                    </button>
+                    <button onclick="switchTab('quiz')" id="tabBtn_quiz" class="tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-lg text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white transition-all">
+                        Quiz
+                    </button>
+                    <button onclick="switchTab('mindmap')" id="tabBtn_mindmap" class="tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-lg text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white transition-all">
+                        Mindmap
+                    </button>
+                    <button onclick="switchTab('ppt')" id="tabBtn_ppt" class="tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-lg text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white transition-all">
+                        Slides Outline
+                    </button>
+                </div>
+            </div>
+
+            <!-- Workspace Viewport Content Area -->
+            <div class="flex-1 flex flex-col overflow-hidden min-h-0">
+                
+                <!-- TAB 1: Document Viewport Panel with Visual PDF Canvas Renderer -->
+                <div id="tab_viewer_panel" class="workspace-panel flex-1 flex flex-col gap-3 h-full overflow-hidden">
+                    <div class="flex justify-between items-center bg-slate-50 dark:bg-darkBg/50 px-4 py-2 rounded-xl shrink-0">
+                        <span id="currentPageLabel" class="text-xs font-mono text-slate-500 dark:text-gray-400">No Document Selected</span>
+                        
+                        <!-- Visual Navigation controls -->
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="navigatePage(-1)" class="p-1 hover:bg-slate-200 dark:hover:bg-darkBorder rounded text-gray-400"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                            <button onclick="navigatePage(1)" class="p-1 hover:bg-slate-200 dark:hover:bg-darkBorder rounded text-gray-400"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-1 bg-slate-50 dark:bg-darkBg/30 rounded-2xl border border-slate-200 dark:border-darkBorder p-4 flex flex-col items-center justify-center overflow-auto min-h-0 relative">
+                        
+                        <!-- PDF Canvas Container -->
+                        <div id="pdfCanvasContainer" class="w-full h-full flex justify-center items-center overflow-auto min-h-0">
+                            <canvas id="pdfRenderCanvas" class="max-w-full max-h-full border border-slate-200 dark:border-darkBorder rounded-xl shadow-lg bg-white hidden"></canvas>
+                        </div>
+
+                        <!-- Empty State visual -->
+                        <div id="canvasEmptyPlaceholder" class="text-center py-12 text-gray-400 text-xs">
+                            <i data-lucide="file-text" class="w-12 h-12 mx-auto mb-3 text-neonPink/60 animate-pulse"></i>
+                            Drop or upload a PDF. We render and visualize pages exactly as they are! 
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- TAB 2: Quiz Room Viewport Panel -->
+                <div id="tab_quiz_panel" class="workspace-panel hidden flex-1 flex flex-col gap-4 h-full overflow-hidden">
+                    <div class="bg-gradient-to-r from-neonPink/10 to-accentOrange/10 border border-neonPink/20 p-4 rounded-2xl flex items-center gap-3 shrink-0">
+                        <div class="w-10 h-10 rounded-xl bg-neonPink/20 flex items-center justify-center text-neonPink"><i data-lucide="brain-circuit" class="w-5 h-5"></i></div>
+                        <div>
+                            <h3 class="text-xs font-bold text-slate-800 dark:text-white">Dynamic Quiz Engine </h3>
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400">Generates custom multiple-choice question sheets automatically.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between shrink-0">
+                        <span id="quizScopeLabel" class="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-1.5 font-medium">
+                            <i data-lucide="globe" class="w-3.5 h-3.5 text-neonPink"></i> Scope: Active PDF
+                        </span>
+                        <button onclick="triggerQuizGeneration()" class="bg-neonPink hover:bg-neonPink/80 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow transition-all">
+                            <i data-lucide="zap" class="w-4 h-4 fill-current"></i> Generate Custom Quiz
+                        </button>
+                    </div>
+
+                    <div id="quizContainer" class="flex-1 overflow-y-auto pr-1 flex flex-col gap-3 min-h-0">
+                        <div class="text-center py-12 text-gray-400 text-xs">
+                            <i data-lucide="help-circle" class="w-8 h-8 mx-auto mb-2 text-gray-400"></i>
+                            Waiting to test your knowledge! Click "Generate Custom Quiz" to analyze your content. 
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: Dynamic Mindmap Graph Viewport -->
+                <div id="tab_mindmap_panel" class="workspace-panel hidden flex-1 flex flex-col gap-4 h-full overflow-hidden">
+                    <div class="bg-gradient-to-r from-purple-500/10 to-neonPink/10 border border-purple-500/20 p-4 rounded-2xl flex items-center gap-3 shrink-0">
+                        <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400"><i data-lucide="git-branch" class="w-5 h-5"></i></div>
+                        <div>
+                            <h3 class="text-xs font-bold text-slate-800 dark:text-white">AI Mindmapper 🕸️</h3>
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400">Auto-visualizes complex structured key-term maps from your docs.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center shrink-0">
+                        <span id="mindmapScopeLabel" class="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-1.5 font-medium">
+                            <i data-lucide="network" class="w-3.5 h-3.5 text-purple-400"></i> Scope: Active PDF
+                        </span>
+                        <button onclick="triggerMindmapGeneration()" class="bg-neonPink hover:bg-neonPink/80 text-white text-xs font-bold py-2 px-4 rounded-xl flex items-center justify-center gap-2 transition-all">
+                            <i data-lucide="shuffle" class="w-4 h-4"></i> Map Out Concepts
+                        </button>
+                    </div>
+
+                    <!-- Render Area of SVG/Nodes Mindmap (Fitted visual limits) -->
+                    <div class="flex-1 bg-slate-50 dark:bg-darkBg/60 border border-slate-200 dark:border-darkBorder rounded-2xl p-4 flex items-center justify-center overflow-auto min-h-0 h-full" id="mindmapCanvas">
+                        <div class="text-center text-xs text-gray-500">
+                            <i data-lucide="network" class="w-8 h-8 mx-auto mb-2 text-gray-400"></i>
+                            No concept map rendered. Build a structural overview with the button above! 
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: PowerPoint Presentations Outliner -->
+                <div id="tab_ppt_panel" class="workspace-panel hidden flex-1 flex flex-col gap-4 h-full overflow-hidden">
+                    <div class="bg-gradient-to-r from-accentOrange/10 to-red-500/10 border border-accentOrange/20 p-4 rounded-2xl flex items-center gap-3 shrink-0">
+                        <div class="w-10 h-10 rounded-xl bg-accentOrange/20 flex items-center justify-center text-accentOrange"><i data-lucide="presentation" class="w-5 h-5"></i></div>
+                        <div>
+                            <h3 class="text-xs font-bold text-slate-800 dark:text-white">Slide Planner</h3>
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400">Drafts complete presentation layouts and section-by-section slide cards.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center shrink-0">
+                        <span id="pptScopeLabel" class="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-1.5 font-medium">
+                            <i data-lucide="layout-template" class="w-3.5 h-3.5 text-accentOrange"></i> Scope: Active PDF
+                        </span>
+                        <button onclick="triggerSlidesGeneration()" class="bg-accentOrange hover:bg-accentOrange/80 text-white text-xs font-bold py-2 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md">
+                            <i data-lucide="sparkles" class="w-4 h-4 fill-current"></i> Craft Slides Outline
+                        </button>
+                    </div>
+
+                    <!-- Slides List Viewer -->
+                    <div class="flex-1 overflow-x-auto flex gap-4 p-2 min-h-0" id="slidesDeckContainer">
+                        <div class="text-center w-full py-12 text-gray-500 text-xs">
+                            <i data-lucide="layout-template" class="w-8 h-8 mx-auto mb-2 text-gray-400"></i>
+                            Your presentation draft will render here slide-by-slide! 
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- RIGHT PANEL: Context-Aware Chat Bot Panel (Col-span 4) -->
+        <section class="lg:col-span-4 flex flex-col gap-4 bg-white dark:bg-darkCard p-5 rounded-3xl border border-slate-200 dark:border-darkBorder shadow-xl h-full overflow-hidden">
+            <!-- Chat Control Header -->
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-darkBorder pb-3 shrink-0">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-neonPink/10 text-neonPink rounded-lg flex items-center justify-center">
+                        <i data-lucide="message-square" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800 dark:text-white">AI Study Tutor 🎓</h2>
+                        <p class="text-[10px] text-gray-400">Gemini 2.5 Flash Engine 🚀</p>
+                    </div>
+                </div>
+                <button onclick="clearChatHistory()" class="text-[10px] bg-slate-100 hover:bg-red-500/20 hover:text-red-500 dark:bg-[#24262a] dark:hover:bg-red-500/20 dark:hover:text-red-400 text-slate-600 dark:text-gray-400 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 shadow-sm">
+                    <i data-lucide="trash-2" class="w-3 h-3"></i> Clear
+                </button>
+            </div>
+
+            <!-- Scrollable Chat Area -->
+            <div id="chatMessages" class="flex-1 overflow-y-auto space-y-4 pr-1 min-h-0">
+                <!-- Static Greetings Message -->
+                <div class="flex items-start gap-2.5">
+                    <div class="w-7 h-7 rounded-lg bg-neonPink/20 text-neonPink flex items-center justify-center text-xs flex-shrink-0">🎓</div>
+                    <div class="bg-slate-50 dark:bg-darkBg p-3 rounded-2xl rounded-tl-none border border-slate-200 dark:border-darkBorder max-w-[85%] text-xs text-slate-600 dark:text-gray-300">
+                        Hey classmate! I'm your dedicated study partner! 📚⚡
+                        <br><br>
+                        Have questions about your uploaded PDFs or anything else beyond them? Ask away! I'll cite page references when taking info from documents, and use my general science/humanities memory to guide you through other topics! 🧠🌟
+                    </div>
+                </div>
+            </div>
+
+            <!-- Typing/Response Indicator -->
+            <div id="typingIndicator" class="hidden flex items-center gap-2 px-3 text-xs text-gray-500 shrink-0">
+                <span class="w-2 h-2 rounded-full bg-neonPink animate-bounce"></span>
+                <span class="w-2 h-2 rounded-full bg-neonPink animate-bounce [animation-delay:0.2s]"></span>
+                <span class="w-2 h-2 rounded-full bg-neonPink animate-bounce [animation-delay:0.4s]"></span>
+                <span class="font-mono text-[10px]">AI Study Buddy is analyzing...</span>
+            </div>
+
+            <!-- Bottom Message input bar -->
+            <div class="relative bg-slate-50 dark:bg-darkBg p-2 rounded-2xl border border-slate-200 dark:border-darkBorder shrink-0">
+                <textarea id="chatInput" rows="2" placeholder="Query document context or general concepts..." 
+                    class="w-full bg-transparent text-xs resize-none focus:outline-none text-slate-800 dark:text-[#f3f4f6] pr-12 pl-2"
+                    onkeydown="handleChatSubmit(event)"></textarea>
+                <button onclick="submitChatQuery()" class="absolute right-3 bottom-3 p-2 bg-neonPink hover:bg-neonPink/80 text-white rounded-xl flex items-center justify-center shadow-md transition-all">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="text-[9px] text-center text-gray-500 shrink-0">
+                💡 Type query & press Enter. Smart RAG context is checked automatically!
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FLOATING HELP MODAL -->
+    <div id="helpModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-darkCard border border-slate-200 dark:border-darkBorder max-w-md w-full rounded-3xl p-6 shadow-2xl relative">
+            <button onclick="closeHelp()" class="absolute right-4 top-4 text-gray-400 hover:text-slate-800 dark:hover:text-white transition-all"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <div class="flex items-center gap-2 mb-4">
+                <div class="w-9 h-9 rounded-xl bg-neonPink/10 text-neonPink flex items-center justify-center"><i data-lucide="help-circle" class="w-5 h-5"></i></div>
+                <h3 class="text-md font-bold text-slate-800 dark:text-white">Quick Study Guide 🎓</h3>
+            </div>
+            <div class="space-y-3 text-xs text-slate-600 dark:text-gray-300 leading-relaxed">
+                <p>🚀 <strong>How to start quickly:</strong></p>
+                <ol class="list-decimal pl-4 space-y-1 text-[11px]">
+                    <li>Type or paste your <strong>Google Gemini API Key</strong> into the header field and click <strong>Connect</strong>. The badge will turn green! 🟢</li>
+                    <li>Upload your PDFs inside the **Document Hub** in the left sidebar. Our local canvas renderer will render pages instantly! 📄</li>
+                    <li>Select whether you want to **Study Individually** (Single Doc) or **Study Together** (Combine All Docs) using the new selector switch! 📚</li>
+                    <li>Toggle tabs in the central panel to generate <strong>Custom Quizzes, Highly Detailed Mindmaps</strong>, or **PowerPoint Slidedecks**!</li>
+                    <li>Need direct answers or homework help? Chat with our AI tutor—it answers document-specific details as well as general knowledge queries! 📌</li>
+                </ol>
+                <p class="pt-2 italic text-gray-500 text-[10px]">Reference layout coordinates styled dynamically to replicate image_79687e.jpg dashboard details.</p>
+            </div>
+            <button onclick="closeHelp()" class="mt-6 w-full py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-[#24262a] dark:hover:bg-[#2e3137] text-slate-800 dark:text-white text-xs font-semibold rounded-xl transition-all">Understood, let's learn!</button>
+        </div>
+    </div>
+
+    <!-- MAIN CONTROL JAVASCRIPT CONTROLLERS -->
+    <script>
+        let loadedDocuments = []; // Initially completely empty!
+        let activeDocIndex = -1;
+        let activePageIndex = -1; 
+        let appTheme = 'dark';
+        let isApiConnected = false;
+        let globalApiKey = '';
+        let validatedModel = 'gemini-2.5-flash'; // Holds our verified model version (dynamically updated!)
+        let studyScope = 'active'; // 'active' (Focused PDF only) or 'all' (Combine all uploaded PDFs!)
+
+        // PDF.js settings
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        // Initialize Dexie.js Database
+        const db = new Dexie("StudyBuddyDatabase");
+        db.version(1).stores({
+            documents: '++id, name', // id, name, pages, pdfData (ArrayBuffer)
+            chatHistory: '++id, sender, text, timestamp' // id, sender, text, timestamp
+        });
+
+        // Load documents from IndexedDB
+        async function loadDocumentsFromDb() {
+            try {
+                const storedDocs = await db.documents.toArray();
+                if (storedDocs.length > 0) {
+                    for (const doc of storedDocs) {
+                        try {
+                            const pdfDoc = await pdfjsLib.getDocument({ data: doc.pdfData }).promise;
+                            loadedDocuments.push({
+                                id: doc.id,
+                                name: doc.name,
+                                pages: doc.pages,
+                                pdfDoc: pdfDoc
+                            });
+                        } catch (e) {
+                            console.error(`Failed to restore PDF for ${doc.name}:`, e);
+                        }
+                    }
+                    renderDocumentSelectOptions();
+                    if (loadedDocuments.length > 0) {
+                        loadDocumentPage(0, 0);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load documents from database:", err);
+            }
+        }
+
+        // Load chat history from IndexedDB
+        async function loadChatHistoryFromDb() {
+            try {
+                const history = await db.chatHistory.orderBy('timestamp').toArray();
+                if (history.length > 0) {
+                    document.getElementById('chatMessages').innerHTML = '';
+                    for (const msg of history) {
+                        if (msg.sender === 'user') {
+                            await appendUserMessage(msg.text, false);
+                        } else {
+                            await appendBotMessage(msg.text, false);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load chat history:", err);
+            }
+        }
+
+        // Main App Initializer
+        async function initApp() {
+            // Initialize Lucide icons
+            lucide.createIcons();
+            
+            // Populating visual elements
+            renderDocumentSelectOptions();
+            updateViewportEmptyPlaceholder();
+
+            // Load stored API key and auto-connect
+            const savedKey = localStorage.getItem('gemini_api_key');
+            if (savedKey) {
+                document.getElementById('apiKeyInput').value = savedKey;
+                await validateApiKey(false); // Validate silently on startup
+            }
+
+            // Load chat history
+            await loadChatHistoryFromDb();
+
+            // Load documents
+            await loadDocumentsFromDb();
+        }
+
+        // Window Initializer
+        window.onload = function() {
+            initApp();
+        };
+
+        // Theme Switcher Engine (Swaps standard Tailwind 'dark' class on HTML node)
+        function toggleTheme() {
+            const htmlNode = document.documentElement;
+            const sunIcon = document.getElementById('sunIcon');
+            const moonIcon = document.getElementById('moonIcon');
+
+            if (htmlNode.classList.contains('dark')) {
+                htmlNode.classList.remove('dark');
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+                appTheme = 'light';
+            } else {
+                htmlNode.classList.add('dark');
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+                appTheme = 'dark';
+            }
+            // Re-render PDF if loaded to match layout sizing constraints
+            if (activeDocIndex !== -1) {
+                renderVisualPdfPage();
+            }
+        }
+
+        // Toggle UI Dialogs
+        function triggerHelp() {
+            const modal = document.getElementById('helpModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        function closeHelp() {
+            const modal = document.getElementById('helpModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // Toggle Study Scope State
+        function setStudyScope(scope) {
+            studyScope = scope;
+            const btnActive = document.getElementById('scopeBtn_active');
+            const btnAll = document.getElementById('scopeBtn_all');
+            const statusDesc = document.getElementById('scopeStatusDesc');
+
+            if (scope === 'active') {
+                btnActive.className = "py-1.5 text-[10px] font-bold rounded-lg transition-all bg-neonPink text-white shadow-sm flex items-center justify-center gap-1";
+                btnAll.className = "py-1.5 text-[10px] font-bold rounded-lg transition-all text-slate-500 dark:text-gray-400 flex items-center justify-center gap-1";
+                statusDesc.innerText = "Currently analyzing only the active focused PDF. 📍";
+                
+                // Update workspace tab context scopes
+                document.getElementById('quizScopeLabel').innerHTML = `<i data-lucide="globe" class="w-3.5 h-3.5 text-neonPink"></i> Scope: Active PDF`;
+                document.getElementById('mindmapScopeLabel').innerHTML = `<i data-lucide="network" class="w-3.5 h-3.5 text-purple-400"></i> Scope: Active PDF`;
+                document.getElementById('pptScopeLabel').innerHTML = `<i data-lucide="layout-template" class="w-3.5 h-3.5 text-accentOrange"></i> Scope: Active PDF`;
+            } else {
+                btnActive.className = "py-1.5 text-[10px] font-bold rounded-lg transition-all text-slate-500 dark:text-gray-400 flex items-center justify-center gap-1";
+                btnAll.className = "py-1.5 text-[10px] font-bold rounded-lg transition-all bg-neonPink text-white shadow-sm flex items-center justify-center gap-1";
+                statusDesc.innerText = "Combined study activated! Merging knowledge across all uploaded documents. ";
+                
+                // Update workspace tab context scopes
+                document.getElementById('quizScopeLabel').innerHTML = `<i data-lucide="globe" class="w-3.5 h-3.5 text-neonPink"></i> Scope: Combined Documents (All Loaded)`;
+                document.getElementById('mindmapScopeLabel').innerHTML = `<i data-lucide="network" class="w-3.5 h-3.5 text-purple-400"></i> Scope: Combined Documents (All Loaded)`;
+                document.getElementById('pptScopeLabel').innerHTML = `<i data-lucide="layout-template" class="w-3.5 h-3.5 text-accentOrange"></i> Scope: Combined Documents (All Loaded)`;
+            }
+            lucide.createIcons();
+        }
+
+        // Validate Key on Click/Enter 🟢 / 🔴 with Multi-Model Testing!
+        async function validateApiKey(showGreeting = true) {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            if (!key) {
+                setApiKeyStatus(false, "No Key provided! 🔑", showGreeting);
+                return;
+            }
+
+            // Visual verification loading status
+            statusText.innerText = "Verifying...";
+            statusText.className = "text-yellow-500 font-bold";
+            statusDot.className = "w-2.5 h-2.5 rounded-full bg-yellow-500 pulse-effect shadow-[0_0_8px_rgba(234,179,8,0.5)]";
+
+            // List of compatible stable models to fallback through
+            const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+            let success = false;
+            let lastError = '';
+
+            for (const model of modelsToTry) {
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: "ping" }] }]
+                        })
+                    });
+
+                    if (response.ok) {
+                        globalApiKey = key;
+                        validatedModel = model;
+                        success = true;
+                        localStorage.setItem('gemini_api_key', key);
+                        break;
+                    } else {
+                        let errData = {};
+                        try {
+                            errData = await response.json();
+                        } catch (jsonErr) {}
+                        lastError = (errData && errData.error && errData.error.message) ? errData.error.message : `HTTP Code ${response.status}`;
+                    }
+                } catch (err) {
+                    lastError = err.message || "Network Error / CORS Block";
+                }
+            }
+
+            if (success) {
+                setApiKeyStatus(true, '', showGreeting);
+            } else {
+                console.error("API Key Verification Failed. Diagnostics:", lastError);
+                localStorage.removeItem('gemini_api_key');
+                setApiKeyStatus(false, lastError, showGreeting);
+            }
+        }
+
+        // Visual connection status
+        function setApiKeyStatus(success, errorDetail = '', showGreeting = true) {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            if (success) {
+                isApiConnected = true;
+                // Glowing solid neon green indicator dot on connection success! 🟢
+                statusDot.className = "w-2.5 h-2.5 rounded-full bg-green-500 pulse-effect shadow-[0_0_12px_rgba(34,197,94,0.8)]";
+                statusText.innerText = "Connected";
+                statusText.className = "text-green-500 dark:text-green-400 font-bold";
+                if (showGreeting) {
+                    appendBotMessage(`🟢 **Connected successfully study-buddy!** ✨\nYour Gemini API key was authenticated using **${validatedModel}**! I am now fully active and ready to assist you! 🧠⚡\n\n*Why did the student study in the airplane? Because they wanted a higher education!* ✈️🎒🤣`);
+                }
+            } else {
+                isApiConnected = false;
+                statusDot.className = "w-2.5 h-2.5 rounded-full bg-red-500 pulse-effect shadow-[0_0_8px_rgba(239,68,68,0.5)]";
+                statusText.innerText = "Offline";
+                statusText.className = "text-red-500 dark:text-red-400 font-bold";
+                
+                if (showGreeting) {
+                    let errMsg = "🔴 **Connection Failed!** Please double-check your Gemini API key and try clicking 'Connect' again!";
+                    if (errorDetail) {
+                        errMsg += `\n\n*Diagnostic details:* \`${errorDetail}\` 🛑`;
+                    }
+                    errMsg += "\n\nIf you don't have a key, feel free to continue using my interactive simulation mode! 🧪💡";
+                    appendBotMessage(errMsg);
+                }
+            }
+        }
+
+        // Document Selector Renderer
+        function renderDocumentSelectOptions() {
+            const docSelectorContainer = document.getElementById('docSelectorContainer');
+            const scopeSelectorContainer = document.getElementById('scopeSelectorContainer');
+            const activeDocSelect = document.getElementById('activeDocSelect');
+            const docCountBadge = document.getElementById('docCount');
+
+            docCountBadge.innerText = `${loadedDocuments.length} Loaded`;
+            activeDocSelect.innerHTML = '';
+
+            if (loadedDocuments.length > 0) {
+                docSelectorContainer.classList.remove('hidden');
+                scopeSelectorContainer.classList.remove('hidden');
+                document.getElementById('sidebarEmptyNotice').classList.add('hidden');
+                loadedDocuments.forEach((doc, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = idx;
+                    opt.innerText = doc.name;
+                    activeDocSelect.appendChild(opt);
+                });
+            } else {
+                docSelectorContainer.classList.add('hidden');
+                scopeSelectorContainer.classList.add('hidden');
+                document.getElementById('sidebarEmptyNotice').classList.remove('hidden');
+            }
+        }
+
+        function switchActiveDocument() {
+            const activeDocSelect = document.getElementById('activeDocSelect');
+            activeDocIndex = parseInt(activeDocSelect.value);
+            loadDocumentPage(activeDocIndex, 0);
+        }
+
+        async function deleteActiveDocument() {
+            if (activeDocIndex === -1 || loadedDocuments.length === 0) return;
+            
+            const docToDelete = loadedDocuments[activeDocIndex];
+            if (confirm(`Are you sure you want to delete "${docToDelete.name}"?`)) {
+                try {
+                    // 1. Delete from database if it has an id
+                    if (docToDelete.id !== undefined) {
+                        await db.documents.delete(docToDelete.id);
+                    }
+                    
+                    // 2. Remove from loadedDocuments array
+                    loadedDocuments.splice(activeDocIndex, 1);
+                    
+                    // 3. Update select options
+                    renderDocumentSelectOptions();
+                    
+                    // 4. Reset focus page
+                    if (loadedDocuments.length > 0) {
+                        loadDocumentPage(0, 0);
+                        const activeDocSelect = document.getElementById('activeDocSelect');
+                        activeDocSelect.value = 0;
+                    } else {
+                        activeDocIndex = -1;
+                        activePageIndex = -1;
+                        updateViewportEmptyPlaceholder();
+                    }
+                    
+                    await appendBotMessage(`🗑️ Deleted document **${docToDelete.name}** successfully!`);
+                } catch (err) {
+                    console.error("Failed to delete document:", err);
+                    await appendBotMessage(`❌ Failed to delete document: ${err.message}`);
+                }
+            }
+        }
+
+        // Fallback for empty state on viewport
+        function updateViewportEmptyPlaceholder() {
+            document.getElementById('pdfRenderCanvas').classList.add('hidden');
+            document.getElementById('canvasEmptyPlaceholder').classList.remove('hidden');
+            document.getElementById('currentPageLabel').innerText = "No Document Selected";
+            lucide.createIcons();
+        }
+
+        // Load specific document page
+        function loadDocumentPage(docIdx, pageIdx) {
+            if (loadedDocuments.length === 0) {
+                updateViewportEmptyPlaceholder();
+                return;
+            }
+            activeDocIndex = docIdx;
+            activePageIndex = pageIdx;
+
+            const doc = loadedDocuments[docIdx];
+            if (!doc) return;
+
+            document.getElementById('canvasEmptyPlaceholder').classList.add('hidden');
+            document.getElementById('currentPageLabel').innerText = `${doc.name} — Page ${pageIdx + 1} of ${doc.pages.length}`;
+
+            // Force visual rendering of current page
+            document.getElementById('pdfRenderCanvas').classList.remove('hidden');
+            renderVisualPdfPage();
+        }
+
+        // Render the actual PDF page on canvas "as it is" with precise height constraints 📄🎨
+        async function renderVisualPdfPage() {
+            const canvas = document.getElementById('pdfRenderCanvas');
+            const currentDoc = loadedDocuments[activeDocIndex];
+            if (!currentDoc || !currentDoc.pdfDoc) return;
+
+            try {
+                const page = await currentDoc.pdfDoc.getPage(activePageIndex + 1);
+                const context = canvas.getContext('2d');
+                
+                // Get viewport dimensions perfectly fitting inside both width & height of containers without cutoff
+                const container = document.getElementById('pdfCanvasContainer');
+                const containerWidth = container.clientWidth || 450;
+                const containerHeight = container.clientHeight || 400;
+
+                const originalViewport = page.getViewport({ scale: 1.0 });
+                const scaleX = (containerWidth - 16) / originalViewport.width;
+                const scaleY = (containerHeight - 16) / originalViewport.height;
+                const scale = Math.min(scaleX, scaleY, 1.4); // Lock max scale ceiling to prevent massive rendering
+
+                const viewport = page.getViewport({ scale: scale });
+
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+                
+                await page.render(renderContext).promise;
+            } catch (err) {
+                console.error("PDF Visual Render Failure:", err);
+            }
+        }
+
+        function navigatePage(direction) {
+            if (loadedDocuments.length === 0) return;
+            const doc = loadedDocuments[activeDocIndex];
+            if (!doc) return;
+
+            let nextIdx = activePageIndex + direction;
+            if (nextIdx >= 0 && nextIdx < doc.pages.length) {
+                loadDocumentPage(activeDocIndex, nextIdx);
+            }
+        }
+
+        // PDF Client Side Parser Integration
+        async function handleFileUpload(event) {
+            const files = event.target.files;
+            if (!files.length) return;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.type !== "application/pdf") {
+                    appendBotMessage(`⚠️ **Oops!** The file "${file.name}" is not a PDF! I can't read this format yet! 🔮`);
+                    continue;
+                }
+
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    const extractedPages = [];
+
+                    for (let pNum = 1; pNum <= pdfDoc.numPages; pNum++) {
+                        const page = await pdfDoc.getPage(pNum);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(" ");
+                        extractedPages.push(pageText || `[Page ${pNum} of ${file.name} contains images only]`);
+                    }
+
+                    // Save document to Dexie database
+                    const dbId = await db.documents.add({
+                        name: file.name,
+                        pages: extractedPages,
+                        pdfData: arrayBuffer
+                    });
+
+                    const newDoc = {
+                        id: dbId,
+                        name: file.name,
+                        pages: extractedPages,
+                        pdfDoc: pdfDoc
+                    };
+
+                    loadedDocuments.push(newDoc);
+                    appendBotMessage(`📁 Loaded document **${file.name}** successfully! Added **${extractedPages.length}** pages. Try switching pages using the navigation buttons inside your Workspace! 📄🚀`);
+
+                } catch (err) {
+                    appendBotMessage(`❌ Error parsing PDF file: ${err.message}`);
+                }
+            }
+
+            renderDocumentSelectOptions();
+            loadDocumentPage(loadedDocuments.length - 1, 0);
+            
+            const activeDocSelect = document.getElementById('activeDocSelect');
+            activeDocSelect.value = loadedDocuments.length - 1;
+        }
+
+        // Tab Selector Engine
+        function switchTab(targetTab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = "tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-lg text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white transition-all";
+            });
+            document.querySelectorAll('.workspace-panel').forEach(panel => {
+                panel.classList.add('hidden');
+            });
+
+            const activeBtn = document.getElementById(`tabBtn_${targetTab}`);
+            if (targetTab === 'viewer') {
+                activeBtn.className = "tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-neonPink text-white shadow transition-all";
+            } else if (targetTab === 'quiz') {
+                activeBtn.className = "tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-neonPink text-white shadow transition-all";
+            } else if (targetTab === 'mindmap') {
+                activeBtn.className = "tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-purple-500 text-white shadow transition-all";
+            } else if (targetTab === 'ppt') {
+                activeBtn.className = "tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-accentOrange text-white font-bold shadow transition-all";
+            }
+
+            document.getElementById(`tab_${targetTab}_panel`).classList.remove('hidden');
+
+            // Handle visual re-render triggers
+            if (targetTab === 'viewer' && activeDocIndex !== -1) {
+                setTimeout(renderVisualPdfPage, 50);
+            }
+        }
+
+        // Chat Box Handlers
+        function handleChatSubmit(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                submitChatQuery();
+            }
+        }
+
+        // Clear Chat logs
+        async function clearChatHistory() {
+            try {
+                await db.chatHistory.clear();
+            } catch (e) {
+                console.error("Failed to clear chat history from IndexedDB:", e);
+            }
+            document.getElementById('chatMessages').innerHTML = `
+                <div class="flex items-start gap-2.5">
+                    <div class="w-7 h-7 rounded-lg bg-neonPink/20 text-neonPink flex items-center justify-center text-xs flex-shrink-0">🎓</div>
+                    <div class="bg-slate-50 dark:bg-darkBg p-3 rounded-2xl rounded-tl-none border border-slate-200 dark:border-darkBorder max-w-[85%] text-xs text-slate-600 dark:text-gray-300">
+                        Chat history cleared! Ask me anything about Mitochondria, Biology, Coding, History or any academic questions! 📚🚀
+                    </div>
+                </div>
+            `;
+        }
+
+        // Compile context string based on Study Scope Settings
+        function compileStudyContext() {
+            if (loadedDocuments.length === 0) return { text: "", name: "None" };
+
+            if (studyScope === 'active' && activeDocIndex !== -1) {
+                const doc = loadedDocuments[activeDocIndex];
+                return {
+                    text: doc.pages.slice(0, 15).join("\n[Page boundary]\n"),
+                    name: doc.name
+                };
+            } else {
+                // Stitch context together across ALL uploaded PDFs up to safe characters ceiling
+                let combinedText = "";
+                let names = [];
+                loadedDocuments.forEach((doc) => {
+                    names.push(doc.name);
+                    combinedText += `\n\n--- COMPILATION DOC: ${doc.name} ---\n`;
+                    combinedText += doc.pages.slice(0, 8).join("\n[Page boundary]\n");
+                });
+                return {
+                    text: combinedText,
+                    name: names.join(", ")
+                };
+            }
+        }
+
+        // Chatbot prompt execution: Can answer beyond documents while honoring active PDF scopes
+        async function submitChatQuery() {
+            const inputField = document.getElementById('chatInput');
+            const userQuery = inputField.value.trim();
+            if (!userQuery) return;
+
+            inputField.value = '';
+            appendUserMessage(userQuery);
+
+            const typingIndicator = document.getElementById('typingIndicator');
+            typingIndicator.classList.remove('hidden');
+
+            const scopeContext = compileStudyContext();
+
+            if (!isApiConnected) {
+                // Fun simulation fallback responses with educational jokes! 🧬💡
+                setTimeout(() => {
+                    typingIndicator.classList.add('hidden');
+                    
+                    let simulatedAnswer = `💡 **Academic Assistant Simulation:**\nI noticed you haven't connected a live Gemini API key in the top control bar yet.\n\nHere is some study-buddy advice:`;
+                    
+                    if (userQuery.toLowerCase().includes('mitochondria') || userQuery.toLowerCase().includes('cell')) {
+                        simulatedAnswer += `\n\n**Mitochondria** are double-membrane organelles responsible for producing ATP (Adenosine Triphosphate), the main chemical energy currency of eukaryotic cells. Think of it as a microscopic energy generator! 🔋\n\n*Joke of the day:* Why did the mitochondria break up with the cell? Because it said: "You're constantly demanding energy and giving me zero space!" 💔😂`;
+                    } else if (userQuery.toLowerCase().includes('quiz') || userQuery.toLowerCase().includes('exam') || userQuery.toLowerCase().includes('study')) {
+                        simulatedAnswer += `\n\nStudying can be hard, but remember to take active breaks! 🧠🎒 Why was the geometry book so adorable? Because it had so many acute angles! 📐✨`;
+                    } else {
+                        simulatedAnswer += `\n\nYour question about "${userQuery}" is excellent! When you connect a live Gemini API key, I can answer this using our advanced model or parse uploaded PDFs to quote and cite exact references. Try it out! 🤩🎓`;
+                    }
+                    
+                    appendBotMessage(simulatedAnswer);
+                }, 1000);
+                return;
+            }
+
+            const payload = {
+                contents: [{
+                    parts: [{
+                        text: `You are an energetic, fun study companion for a student. Use plenty of jokes, lots of emojis (✨📚🧠🎒⚡🌸), and structured headings!
+
+                        ---
+                        CURRENT STUDY SCOPE DESIGNATION: "${studyScope}"
+                        ACTIVE DOCUMENT FILE(S): "${scopeContext.name}"
+                        EXTRACTED TEXT CONTEXT (RAG):
+                        "${scopeContext.text}"
+                        ---
+                        
+                        Student's Question: "${userQuery}"
+                        
+                        INSTRUCTIONS:
+                        1. If the student's question is directly related to the uploaded document context, use that context to answer. When doing so, clearly append a citation at the very end (e.g., "📌 Citation Reference: [Doc Name, Page X]").
+                        2. If the question is generic, general knowledge, or completely unrelated to the uploaded documents (such as coding requests, historical facts not in the document, jokes, creative writing, or casual chat), answer it directly, normally, and creatively using your broad general knowledge! Do NOT force document citations, say "Educational General Knowledge Context", or claim you can't find it in the textbook. Just answer naturally, clearly, and helpfully like a cool tutor!
+                        3. Always keep your tone lively, encouraging, and witty. Don't forget to include a funny joke or academic pun directly related to the student's specific question topic to keep them smiling! 😂✨`
+                    }]
+                }]
+            };
+
+            try {
+                const textResult = await executeGeminiCall(payload);
+                typingIndicator.classList.add('hidden');
+                appendBotMessage(textResult);
+            } catch (err) {
+                typingIndicator.classList.add('hidden');
+                appendBotMessage(`❌ **Oops! Gemini encountered an issue:** ${err.message}. Let's re-try!`);
+            }
+        }
+
+        // Robust Retrying Gemini Call Wrapper 🚀
+        async function executeGeminiCall(payload, retries = 5, delay = 1000) {
+            // Uses validatedModel dynamically generated on validation
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${validatedModel}:generateContent?key=${globalApiKey}`;
+            
+            for (let attempt = 1; attempt <= retries; attempt++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.status === 200) {
+                        const json = await response.json();
+                        return json.candidates?.[0]?.content?.parts?.[0]?.text || "No response received. 🤔";
+                    }
+
+                    if (response.status === 429 && attempt < retries) {
+                        await new Promise(r => setTimeout(r, delay));
+                        delay *= 2; 
+                        continue;
+                    }
+
+                    throw new Error(`Server returned status code: ${response.status}`);
+                } catch (err) {
+                    if (attempt === retries) throw err;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        async function appendUserMessage(text, saveToDb = true) {
+            const container = document.getElementById('chatMessages');
+            const bubble = document.createElement('div');
+            bubble.className = "flex items-start justify-end gap-2.5 flex-shrink-0";
+            bubble.innerHTML = `
+                <div class="bg-neonPink/10 border border-neonPink/30 p-3 rounded-2xl rounded-tr-none max-w-[85%] text-xs text-neonPink">
+                    ${text}
+                </div>
+                <div class="w-7 h-7 rounded-lg bg-neonPink/20 text-neonPink flex items-center justify-center text-xs flex-shrink-0">🤓</div>
+            `;
+            container.appendChild(bubble);
+            container.scrollTop = container.scrollHeight;
+
+            if (saveToDb) {
+                try {
+                    await db.chatHistory.add({
+                        sender: 'user',
+                        text: text,
+                        timestamp: Date.now()
+                    });
+                } catch (e) {
+                    console.error("Failed to save user message to IndexedDB:", e);
+                }
+            }
+        }
+
+        async function appendBotMessage(text, saveToDb = true) {
+            const container = document.getElementById('chatMessages');
+            const bubble = document.createElement('div');
+            bubble.className = "flex items-start gap-2.5 flex-shrink-0";
+            
+            const formattedText = text
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+            bubble.innerHTML = `
+                <div class="w-7 h-7 rounded-lg bg-neonPink/20 text-neonPink flex items-center justify-center text-xs flex-shrink-0">🤖</div>
+                <div class="bg-slate-50 dark:bg-darkBg p-3 rounded-2xl rounded-tl-none border border-slate-200 dark:border-darkBorder max-w-[85%] text-xs text-slate-600 dark:text-gray-300 leading-relaxed select-text font-sans">
+                    ${formattedText}
+                </div>
+            `;
+            container.appendChild(bubble);
+            container.scrollTop = container.scrollHeight;
+
+            if (saveToDb) {
+                try {
+                    await db.chatHistory.add({
+                        sender: 'bot',
+                        text: text,
+                        timestamp: Date.now()
+                    });
+                } catch (e) {
+                    console.error("Failed to save bot message to IndexedDB:", e);
+                }
+            }
+        }
+
+        // DYNAMIC QUIZ GENERATOR
+        async function triggerQuizGeneration() {
+            const quizContainer = document.getElementById('quizContainer');
+            if (loadedDocuments.length === 0) {
+                quizContainer.innerHTML = `
+                    <div class="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-center text-xs text-red-400">
+                        🔴 Please upload a document in your left sidebar first to generate contextual quizzes!
+                    </div>
+                `;
+                return;
+            }
+            if (!isApiConnected) {
+                quizContainer.innerHTML = `
+                    <div class="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-center text-xs text-red-400">
+                        🔴 Please validate your Gemini API Key in the top navigation panel to generate study questions!
+                    </div>
+                `;
+                return;
+            }
+
+            quizContainer.innerHTML = `
+                <div class="text-center py-12 text-gray-400 text-xs flex flex-col items-center gap-2">
+                    <span class="w-6 h-6 border-2 border-neonPink border-t-transparent rounded-full animate-spin"></span>
+                    Gemini is building custom quizzes for the chosen scope... 🧬⚡
+                </div>
+            `;
+
+            const scopeContext = compileStudyContext();
+
+            const payload = {
+                contents: [{
+                    parts: [{
+                        text: `You are an academic test maker. Take the following text context and generate exactly 3 broad multiple-choice questions testing major overall themes.
+                        You must respond ONLY with a raw JSON array matching this precise structure:
+                        [
+                          {
+                            "question": "What primary concept discussed in the context...",
+                            "options": ["A) option 1", "B) option 2", "C) option 3", "D) option 4"],
+                            "answer": 1,
+                            "explanation": "Brief reasoning referencing the text details."
+                          }
+                        ]
+                        
+                        ---
+                        Scope Context Source(s): ${scopeContext.name}
+                        Context Data: "${scopeContext.text.substring(0, 15000)}"`
+                    }]
+                }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            try {
+                const responseText = await executeGeminiCall(payload);
+                const quizData = JSON.parse(responseText);
+                renderQuiz(quizData);
+            } catch (err) {
+                quizContainer.innerHTML = `
+                    <div class="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-xs text-red-400">
+                        Failed to generate custom quiz. Detail: ${err.message}
+                    </div>
+                `;
+            }
+        }
+
+        function renderQuiz(questions) {
+            const quizContainer = document.getElementById('quizContainer');
+            quizContainer.innerHTML = '';
+
+            questions.forEach((q, qIdx) => {
+                const qCard = document.createElement('div');
+                qCard.className = "bg-slate-50 dark:bg-darkBg/60 border border-slate-200 dark:border-darkBorder p-4 rounded-2xl flex flex-col gap-3 flex-shrink-0";
+                
+                let optionsHtml = '';
+                q.options.forEach((opt, oIdx) => {
+                    const escapedExplanation = encodeURIComponent(q.explanation).replace(/'/g, "%27");
+                    optionsHtml += `
+                        <button onclick="checkQuizAnswer(this, ${qIdx}, ${oIdx}, ${q.answer}, '${escapedExplanation}')" class="quiz-option text-left text-xs p-2.5 rounded-xl border border-slate-200 dark:border-darkBorder bg-white dark:bg-darkCard hover:border-neonPink/40 transition-all text-slate-700 dark:text-gray-300 font-sans">
+                            ${opt}
+                        </button>
+                    `;
+                });
+
+                qCard.innerHTML = `
+                    <h4 class="text-xs font-bold text-slate-855 dark:text-white flex gap-2">
+                        <span class="text-neonPink">Q${qIdx + 1}.</span> ${q.question}
+                    </h4>
+                    <div class="grid grid-cols-1 gap-2 flex-1">
+                        ${optionsHtml}
+                    </div>
+                    <div id="explanation_${qIdx}" class="hidden text-[10px] text-gray-500 dark:text-gray-400 border-t border-slate-200 dark:border-darkBorder pt-2 mt-1 font-sans"></div>
+                `;
+                quizContainer.appendChild(qCard);
+            });
+        }
+
+        function checkQuizAnswer(button, qIdx, selectedIdx, correctIdx, explanation) {
+            const parent = button.parentElement;
+            const options = parent.querySelectorAll('.quiz-option');
+            
+            options.forEach(opt => {
+                opt.disabled = true;
+                opt.classList.add('opacity-60');
+            });
+
+            const explanationBox = document.getElementById(`explanation_${qIdx}`);
+            explanationBox.classList.remove('hidden');
+
+            if (selectedIdx === correctIdx) {
+                button.className = "quiz-option text-left text-xs p-2.5 rounded-xl border-neonPink/50 bg-neonPink/10 text-neonPink font-semibold";
+                explanationBox.innerHTML = `🎯 **Spot on! Correct!** <br>${decodeURIComponent(explanation)}`;
+            } else {
+                button.className = "quiz-option text-left text-xs p-2.5 rounded-xl border-red-500/50 bg-red-500/10 text-red-500 dark:text-red-400 font-semibold";
+                options[correctIdx].className = "quiz-option text-left text-xs p-2.5 rounded-xl border-neonPink/50 bg-neonPink/10 text-neonPink font-semibold";
+                explanationBox.innerHTML = `❌ **Oof! Almost!** Let's review the chapters:<br>${decodeURIComponent(explanation)}`;
+            }
+        }
+
+        // SLIDES PLANNER
+        async function triggerSlidesGeneration() {
+            const slidesContainer = document.getElementById('slidesDeckContainer');
+            if (loadedDocuments.length === 0) {
+                slidesContainer.innerHTML = `
+                    <div class="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-center text-xs text-red-400 w-full">
+                        🔴 Please upload a document in your left sidebar first to outline slideshows!
+                    </div>
+                `;
+                return;
+            }
+            if (!isApiConnected) {
+                slidesContainer.innerHTML = `
+                    <div class="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-center text-xs text-red-400 w-full">
+                        🔴 Validate your Gemini API Key in the header control bar to unlock the PowerPoint outlining wizard.
+                    </div>
+                `;
+                return;
+            }
+
+            slidesContainer.innerHTML = `
+                <div class="text-center py-12 text-gray-400 text-xs flex flex-col items-center justify-center gap-2 w-full">
+                    <span class="w-6 h-6 border-2 border-accentOrange border-t-transparent rounded-full animate-spin"></span>
+                    Synthesizing slide deck based on the chosen document scope... 📊💫
+                </div>
+            `;
+
+            const scopeContext = compileStudyContext();
+
+            const payload = {
+                contents: [{
+                    parts: [{
+                        text: `You are an educational designer. Design a slide deck outlining the key topics of the provided text scope. Provide exactly 4 slides mapping the overall content.
+                        Your response must return ONLY a structured JSON array strictly formatted as:
+                        [
+                          {
+                            "title": "Chapter Summary / Theme",
+                            "points": ["Major key point A", "Detail about key point B", "Conclusion detail C"]
+                          }
+                        ]
+                        
+                        ---
+                        Scope Context Source(s): ${scopeContext.name}
+                        Scope Context: "${scopeContext.text.substring(0, 15000)}"`
+                    }]
+                }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            try {
+                const responseText = await executeGeminiCall(payload);
+                const slidesData = JSON.parse(responseText);
+                renderSlidesDeck(slidesData);
+            } catch (err) {
+                slidesContainer.innerHTML = `
+                    <div class="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-xs text-red-400">
+                        Slide outline generation error: ${err.message}
+                    </div>
+                `;
+            }
+        }
+
+        function renderSlidesDeck(slides) {
+            const slidesContainer = document.getElementById('slidesDeckContainer');
+            slidesContainer.innerHTML = '';
+
+            slides.forEach((slide, idx) => {
+                const slideDiv = document.createElement('div');
+                slideDiv.className = "flex-shrink-0 w-64 bg-gradient-to-br from-slate-100 to-white dark:from-[#1c1d22] dark:to-darkCard border border-slate-200 dark:border-darkBorder rounded-2xl p-4 flex flex-col justify-between shadow-lg relative overflow-hidden group hover:border-accentOrange/40 transition-all";
+                
+                let pointsHtml = '';
+                slide.points.forEach(pt => {
+                    pointsHtml += `<li class="text-[10px] leading-relaxed text-slate-600 dark:text-gray-300 list-disc pl-1 ml-3 font-sans">${pt}</li>`;
+                });
+
+                slideDiv.innerHTML = `
+                    <div class="absolute -right-6 -bottom-6 w-20 h-20 bg-accentOrange/5 rounded-full blur-xl group-hover:bg-accentOrange/10 transition-all"></div>
+                    <div>
+                        <div class="flex items-center justify-between border-b border-slate-200 dark:border-darkBorder pb-2 mb-2">
+                            <span class="text-[9px] uppercase tracking-wider font-bold text-accentOrange">Slide ${idx + 1}</span>
+                            <i data-lucide="monitor-play" class="w-3.5 h-3.5 text-gray-400 dark:text-gray-500"></i>
+                        </div>
+                        <h4 class="text-xs font-bold text-slate-800 dark:text-white mb-3 tracking-wide truncate font-sans">${slide.title}</h4>
+                        <ul class="space-y-1.5 flex flex-col">
+                            ${pointsHtml}
+                        </ul>
+                    </div>
+                    <div class="mt-4 pt-2 border-t border-slate-200 dark:border-darkBorder/40 flex justify-between items-center text-[8px] text-gray-400 dark:text-gray-500">
+                        <span>StudyBuddy Deck</span>
+                        <span>Scope Draft</span>
+                    </div>
+                `;
+                slidesContainer.appendChild(slideDiv);
+            });
+            lucide.createIcons();
+        }
+
+        // AI MINDMAP GENERATION
+        async function triggerMindmapGeneration() {
+            const mapCanvas = document.getElementById('mindmapCanvas');
+            if (loadedDocuments.length === 0) {
+                mapCanvas.innerHTML = `
+                    <div class="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-center text-xs text-red-400 w-full">
+                        🔴 Please upload a document in your left sidebar first to visualize concept mindmaps!
+                    </div>
+                `;
+                return;
+            }
+            if (!isApiConnected) {
+                mapCanvas.innerHTML = `
+                    <div class="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-center text-xs text-red-400 w-full">
+                        🔴 Please configure your Gemini API Key inside the top bar to visualize logical mindmaps.
+                    </div>
+                `;
+                return;
+            }
+
+            mapCanvas.innerHTML = `
+                <div class="text-center py-12 text-gray-400 text-xs flex flex-col items-center justify-center gap-2 w-full">
+                    <span class="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></span>
+                    Mapping deeply structured key terms via Gemini... 🕸️💭
+                </div>
+            `;
+
+            const scopeContext = compileStudyContext();
+
+            const payload = {
+                contents: [{
+                    parts: [{
+                        text: `You are an expert educational visualizer. Create a concept mindmap mapping key concepts.
+                        
+                        CRITICAL REQUIREMENT: Do NOT include long text descriptions, sentences, or paragraphs inside node blocks. Every "name" and detail item inside "details" MUST be limited strictly to a concise key-term or brief line (1-4 words maximum). E.g. "ATP Synthase" instead of "The machine that converts ADP into high-energy chemical ATP packets."
+                        
+                        Provide a hierarchical JSON structure matching this exact schema:
+                        {
+                          "label": "Brief Central Topic (1-3 words)",
+                          "summary": "Short 1-sentence outline...",
+                          "branches": [
+                            {
+                              "label": "Sub-theme Name (1-3 words)",
+                              "subconcepts": [
+                                {
+                                  "name": "Brief Concept (1-3 words)",
+                                  "details": ["Key Term A", "Key Term B"]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                        
+                        ---
+                        Scope Context Source(s): ${scopeContext.name}
+                        Scope Context: "${scopeContext.text.substring(0, 15000)}"`
+                    }]
+                }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            try {
+                const responseText = await executeGeminiCall(payload);
+                const mapData = JSON.parse(responseText);
+                renderSymmetricMindmap(mapData);
+            } catch (err) {
+                mapCanvas.innerHTML = `
+                    <div class="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-xs text-red-400">
+                        Logical mapping error: ${err.message}
+                    </div>
+                `;
+            }
+        }
+
+        // High-fidelity multi-level symmetric mindmap renderer with nested structures fitting perfectly inside visible boundary
+        function renderSymmetricMindmap(data) {
+            const mapCanvas = document.getElementById('mindmapCanvas');
+            mapCanvas.innerHTML = '';
+
+            const mainTree = document.createElement('div');
+            mainTree.className = "flex flex-col items-center gap-6 w-full py-4 px-2 min-w-[500px] select-none h-full justify-start";
+
+            // Root Node Card
+            const rootWrapper = document.createElement('div');
+            rootWrapper.className = "flex flex-col items-center gap-1 max-w-sm text-center relative z-10 shrink-0";
+
+            const rootNode = document.createElement('div');
+            rootNode.className = "bg-gradient-to-r from-neonPink to-purple-600 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-xl border border-neonPink/30 uppercase tracking-wider hover:scale-105 transition-transform cursor-pointer";
+            rootNode.innerText = data.label;
+
+            const rootSummary = document.createElement('p');
+            rootSummary.className = "text-[10px] text-slate-500 dark:text-gray-400 italic px-4";
+            rootSummary.innerText = data.summary || "Summary Overview.";
+
+            rootWrapper.appendChild(rootNode);
+            rootWrapper.appendChild(rootSummary);
+            mainTree.appendChild(rootWrapper);
+
+            // Row representing child branches
+            const branchRow = document.createElement('div');
+            branchRow.className = "flex justify-center gap-4 w-full relative pt-4 border-t border-slate-200 dark:border-darkBorder overflow-x-auto min-h-0";
+
+            if (data.branches && data.branches.length > 0) {
+                data.branches.forEach((branch, bIdx) => {
+                    const bCol = document.createElement('div');
+                    bCol.className = "flex flex-col items-center gap-3 flex-1 min-w-[150px] max-w-[220px] bg-slate-100/40 dark:bg-darkCard/30 p-2.5 rounded-2xl border border-slate-200/60 dark:border-darkBorder/60 shadow-sm relative";
+
+                    // Branch Head title node
+                    const bHead = document.createElement('div');
+                    bHead.className = "bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-bold text-[9px] p-2 rounded-xl border border-purple-300 dark:border-purple-500/30 text-center w-full uppercase tracking-wide truncate";
+                    bHead.innerText = branch.label;
+                    bCol.appendChild(bHead);
+
+                    // Deeper Subconcepts levels!
+                    if (branch.subconcepts && branch.subconcepts.length > 0) {
+                        branch.subconcepts.forEach((sub, sIdx) => {
+                            const subCard = document.createElement('div');
+                            subCard.className = "bg-white dark:bg-darkCard text-left w-full p-2 rounded-xl border border-slate-200 dark:border-darkBorder shadow-sm flex flex-col gap-1 transition-all hover:border-neonPink/40 cursor-pointer overflow-hidden";
+
+                            const subName = document.createElement('h5');
+                            subName.className = "text-[9px] font-bold text-slate-800 dark:text-white flex items-center gap-1 truncate";
+                            subName.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-neonPink flex-shrink-0"></span> ${sub.name}`;
+                            subCard.appendChild(subName);
+
+                            // Leaf list items
+                            if (sub.details && sub.details.length > 0) {
+                                const detailsList = document.createElement('ul');
+                                detailsList.className = "space-y-0.5 pl-1.5 border-l border-slate-200 dark:border-darkBorder";
+                                sub.details.forEach(det => {
+                                    const li = document.createElement('li');
+                                    li.className = "text-[8px] text-slate-500 dark:text-gray-400 list-none font-sans leading-tight truncate";
+                                    li.innerText = `• ${det}`;
+                                    detailsList.appendChild(li);
+                                });
+                                subCard.appendChild(detailsList);
+                            }
+
+                            bCol.appendChild(subCard);
+                        });
+                    }
+
+                    branchRow.appendChild(bCol);
+                });
+            }
+
+            mainTree.appendChild(branchRow);
+            mapCanvas.appendChild(mainTree);
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
