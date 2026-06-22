@@ -1,5 +1,7 @@
 # StudyBuddy — Notebook LLM Studio 🎓⚡
 
+> **Live Demo:** [study-buddy-umber-psi.vercel.app](https://study-buddy-umber-psi.vercel.app)
+
 **StudyBuddy** is a modern, high-fidelity, interactive multi-document workspace designed for students and researchers. It allows you to upload study PDFs, parse them locally in your browser, and utilize the power of the Google Gemini API to generate dynamic quizzes, visual mindmaps, presentation outlines, and chat with an AI study tutor.
 
 The application operates **fully client-side** using **Dexie.js (IndexedDB)** for local browser database persistence. Your documents, chat history, and API configurations remain private and stored directly on your machine.
